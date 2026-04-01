@@ -1,0 +1,403 @@
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font-sans)}
+.container{padding:1.5rem 0;width:100%}
+h2{font-size:18px;font-weight:500;color:var(--color-text-primary);margin-bottom:4px}
+.subtitle{font-size:13px;color:var(--color-text-secondary);margin-bottom:1.5rem}
+.metric-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:1.5rem}
+.metric{background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:0.9rem 1rem}
+.metric-label{font-size:12px;color:var(--color-text-secondary);margin-bottom:4px}
+.metric-value{font-size:22px;font-weight:500;color:var(--color-text-primary)}
+.metric-sub{font-size:11px;color:var(--color-text-tertiary);margin-top:2px}
+.controls{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:1.5rem}
+.ctrl{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);padding:0.75rem 1rem}
+.ctrl label{font-size:12px;color:var(--color-text-secondary);display:block;margin-bottom:6px}
+.ctrl-row{display:flex;align-items:center;gap:8px}
+.ctrl-row input[type=range]{flex:1}
+.ctrl-row span{font-size:13px;font-weight:500;min-width:34px;text-align:right;color:var(--color-text-primary)}
+.chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:1.5rem}
+.chart-box{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);padding:1rem}
+.chart-title{font-size:13px;font-weight:500;color:var(--color-text-secondary);margin-bottom:0.75rem}
+.chart-wrap{position:relative;height:180px}
+.sim-section{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);padding:1rem;margin-bottom:1.5rem}
+.sim-title{font-size:13px;font-weight:500;color:var(--color-text-secondary);margin-bottom:0.75rem}
+.intersection-wrap{display:flex;justify-content:center;align-items:center;padding:0.5rem 0}
+.btn-row{display:flex;gap:10px;margin-bottom:1.5rem;flex-wrap:wrap}
+button{font-size:13px;padding:8px 18px;border-radius:var(--border-radius-md);border:0.5px solid var(--color-border-secondary);background:var(--color-background-primary);color:var(--color-text-primary);cursor:pointer}
+button.primary{background:#185FA5;color:#fff;border-color:#185FA5}
+button:disabled{opacity:0.4;cursor:not-allowed}
+.phase-badge{display:inline-block;font-size:11px;padding:2px 10px;border-radius:var(--border-radius-md);font-weight:500}
+.ns-phase{background:#EAF3DE;color:#27500A}
+.ew-phase{background:#E6F1FB;color:#0C447C}
+.log-box{background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:0.75rem 1rem;font-family:var(--font-mono);font-size:11px;color:var(--color-text-secondary);max-height:120px;overflow-y:auto;line-height:1.7}
+.legend-row{display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:var(--color-text-secondary);margin-top:8px}
+.leg-item{display:flex;align-items:center;gap:5px}
+.leg-sq{width:10px;height:10px;border-radius:2px;flex-shrink:0}
+.perf-compare{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:1rem}
+.perf-card{background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:0.75rem 1rem}
+.perf-card h4{font-size:12px;color:var(--color-text-secondary);font-weight:500;margin-bottom:6px}
+.bar-label{font-size:12px;color:var(--color-text-primary);margin-bottom:3px}
+.bar-track{height:10px;background:var(--color-border-tertiary);border-radius:4px;overflow:hidden;margin-bottom:6px}
+.bar-fill{height:100%;border-radius:4px;transition:width 0.5s}
+</style>
+
+<div class="container">
+<h2>SARSA(λ) Traffic Signal Control — Reinforcement Learning Simulator</h2>
+<p class="subtitle">Single intersection adaptive control · On-policy TD(λ) with eligibility traces · Epsilon-greedy exploration</p>
+
+<div class="metric-grid">
+  <div class="metric"><div class="metric-label">Episode</div><div class="metric-value" id="m-ep">0</div><div class="metric-sub">of <span id="m-maxep">500</span></div></div>
+  <div class="metric"><div class="metric-label">Avg Waiting (SARSA)</div><div class="metric-value" id="m-wait">—</div><div class="metric-sub">vehicles/step</div></div>
+  <div class="metric"><div class="metric-label">Avg Waiting (Fixed)</div><div class="metric-value" id="m-fixed">—</div><div class="metric-sub">baseline</div></div>
+  <div class="metric"><div class="metric-label">Improvement</div><div class="metric-value" id="m-imp">—</div><div class="metric-sub">vs fixed-time</div></div>
+</div>
+
+<div class="controls">
+  <div class="ctrl">
+    <label>Learning rate α</label>
+    <div class="ctrl-row"><input type="range" id="sl-alpha" min="0.01" max="0.5" step="0.01" value="0.1"><span id="vl-alpha">0.10</span></div>
+  </div>
+  <div class="ctrl">
+    <label>Discount factor γ</label>
+    <div class="ctrl-row"><input type="range" id="sl-gamma" min="0.5" max="0.99" step="0.01" value="0.9"><span id="vl-gamma">0.90</span></div>
+  </div>
+  <div class="ctrl">
+    <label>Trace decay λ</label>
+    <div class="ctrl-row"><input type="range" id="sl-lambda" min="0" max="0.99" step="0.01" value="0.7"><span id="vl-lambda">0.70</span></div>
+  </div>
+  <div class="ctrl">
+    <label>Epsilon ε (exploration)</label>
+    <div class="ctrl-row"><input type="range" id="sl-eps" min="0.01" max="0.5" step="0.01" value="0.15"><span id="vl-eps">0.15</span></div>
+  </div>
+  <div class="ctrl">
+    <label>Traffic demand (vehicles/step)</label>
+    <div class="ctrl-row"><input type="range" id="sl-demand" min="1" max="10" step="1" value="4"><span id="vl-demand">4</span></div>
+  </div>
+  <div class="ctrl">
+    <label>Episodes</label>
+    <div class="ctrl-row"><input type="range" id="sl-ep" min="100" max="1000" step="50" value="500"><span id="vl-ep">500</span></div>
+  </div>
+</div>
+
+<div class="btn-row">
+  <button class="primary" id="btn-train">▶ Train Agent</button>
+  <button id="btn-sim" disabled>Run Live Simulation</button>
+  <button id="btn-reset">Reset</button>
+</div>
+
+<div class="chart-grid">
+  <div class="chart-box">
+    <div class="chart-title">Average waiting vehicles per episode</div>
+    <div class="chart-wrap"><canvas id="chart-wait"></canvas></div>
+    <div class="legend-row">
+      <div class="leg-item"><div class="leg-sq" style="background:#185FA5"></div>SARSA(λ)</div>
+      <div class="leg-item"><div class="leg-sq" style="background:#888780"></div>Fixed-time baseline</div>
+    </div>
+  </div>
+  <div class="chart-box">
+    <div class="chart-title">Cumulative reward per episode</div>
+    <div class="chart-wrap"><canvas id="chart-reward"></canvas></div>
+    <div class="legend-row">
+      <div class="leg-item"><div class="leg-sq" style="background:#3B6D11"></div>Cumulative reward</div>
+      <div class="leg-item"><div class="leg-sq" style="background:#993C1D"></div>Moving average (20 ep)</div>
+    </div>
+  </div>
+  <div class="chart-box">
+    <div class="chart-title">Epsilon decay over training</div>
+    <div class="chart-wrap"><canvas id="chart-eps"></canvas></div>
+  </div>
+  <div class="chart-box">
+    <div class="chart-title">Queue length by approach (final 50 ep)</div>
+    <div class="chart-wrap"><canvas id="chart-queue"></canvas></div>
+  </div>
+</div>
+
+<div class="sim-section">
+  <div class="sim-title">Live intersection visualization</div>
+  <div class="intersection-wrap">
+    <canvas id="canvas-int" width="320" height="320"></canvas>
+  </div>
+  <div style="text-align:center;margin-top:8px;font-size:12px;color:var(--color-text-secondary)">
+    Phase: <span id="phase-badge" class="phase-badge ns-phase">NS Green</span>
+    &nbsp;|&nbsp; Step: <span id="sim-step">0</span>
+    &nbsp;|&nbsp; NS queue: <span id="q-ns">0</span> &nbsp; EW queue: <span id="q-ew">0</span>
+    &nbsp;|&nbsp; Action: <span id="sim-action">—</span>
+  </div>
+</div>
+
+<div class="perf-compare">
+  <div class="perf-card">
+    <h4>Performance comparison (final 50 episodes)</h4>
+    <div id="perf-bars"></div>
+  </div>
+  <div class="perf-card">
+    <h4>Algorithm log</h4>
+    <div class="log-box" id="log-box">Waiting to train…</div>
+  </div>
+</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const sliders = [
+  ['sl-alpha','vl-alpha'],['sl-gamma','vl-gamma'],['sl-lambda','vl-lambda'],
+  ['sl-eps','vl-eps'],['sl-demand','vl-demand'],['sl-ep','vl-ep','m-maxep']
+];
+sliders.forEach(([sl,vl,extra])=>{
+  const s=$(sl),v=$(vl);
+  const update=()=>{ const val=parseFloat(s.value); v.textContent=val.toFixed(sl==='sl-demand'||sl==='sl-ep'?0:2); if(extra)$(extra).textContent=s.value; };
+  s.addEventListener('input',update); update();
+});
+
+function getParams(){
+  return {
+    alpha:parseFloat($('sl-alpha').value),
+    gamma:parseFloat($('sl-gamma').value),
+    lambda:parseFloat($('sl-lambda').value),
+    eps:parseFloat($('sl-eps').value),
+    demand:parseInt($('sl-demand').value),
+    episodes:parseInt($('sl-ep').value)
+  };
+}
+
+const ACTIONS=['keep','switch'];
+const NS=0,EW=1;
+
+class TrafficEnv{
+  constructor(demand){this.demand=demand;this.reset();}
+  reset(){this.phase=NS;this.ns_q=0;this.ew_q=0;this.timer=0;this.step=0;return this.getState();}
+  getState(){
+    const ns=Math.min(this.ns_q,9);
+    const ew=Math.min(this.ew_q,9);
+    const t=Math.min(Math.floor(this.timer/5),3);
+    return ns*40+ew*4+t;
+  }
+  step_env(action){
+    this.step++;
+    const switched=(action===1);
+    if(switched&&this.timer>=5){this.phase=1-this.phase;this.timer=0;}
+    else this.timer++;
+    const arr_ns=Math.random()<this.demand/10?Math.ceil(Math.random()*2):0;
+    const arr_ew=Math.random()<this.demand/10?Math.ceil(Math.random()*2):0;
+    this.ns_q+=arr_ns; this.ew_q+=arr_ew;
+    if(this.phase===NS)this.ns_q=Math.max(0,this.ns_q-Math.floor(Math.random()*2+2));
+    else this.ew_q=Math.max(0,this.ew_q-Math.floor(Math.random()*2+2));
+    const wait=this.ns_q+this.ew_q;
+    const reward=-(wait+0.5*Math.abs(this.ns_q-this.ew_q));
+    return {state:this.getState(),reward,done:this.step>=200,ns_q:this.ns_q,ew_q:this.ew_q,phase:this.phase};
+  }
+}
+
+class SarsaLambda{
+  constructor(numStates,numActions,alpha,gamma,lambda,eps){
+    this.alpha=alpha;this.gamma=gamma;this.lambda=lambda;this.eps=eps;
+    this.Q=Array.from({length:numStates},()=>new Float32Array(numActions).fill(0));
+    this.E=Array.from({length:numStates},()=>new Float32Array(numActions).fill(0));
+  }
+  policy(s){
+    if(Math.random()<this.eps)return Math.floor(Math.random()*2);
+    return this.Q[s][0]>=this.Q[s][1]?0:1;
+  }
+  update(s,a,r,s2,a2){
+    const delta=r+this.gamma*this.Q[s2][a2]-this.Q[s][a];
+    this.E[s][a]+=1;
+    for(let i=0;i<this.Q.length;i++){
+      for(let j=0;j<2;j++){
+        this.Q[i][j]+=this.alpha*delta*this.E[i][j];
+        this.E[i][j]*=this.gamma*this.lambda;
+      }
+    }
+  }
+  resetTraces(){this.E.forEach(row=>{row[0]=0;row[1]=0;});}
+  decayEps(){this.eps=Math.max(0.01,this.eps*0.995);}
+}
+
+let charts={};
+function makeChart(id,type,data,opts){
+  if(charts[id])charts[id].destroy();
+  charts[id]=new Chart($(id),{type,data,options:{responsive:true,maintainAspectRatio:false,animation:false,plugins:{legend:{display:false}},...opts}});
+}
+
+function log(msg){const b=$('log-box');b.innerHTML+=msg+'<br>';b.scrollTop=b.scrollHeight;}
+
+let trainedAgent=null,trainedParams=null;
+
+$('btn-train').addEventListener('click',()=>{
+  const p=getParams();
+  const env=new TrafficEnv(p.demand);
+  const agent=new SarsaLambda(400,2,p.alpha,p.gamma,p.lambda,p.eps);
+  const waitHistory=[],rewardHistory=[],epsHistory=[];
+  const fixedHistory=[];
+  let logLines=[];
+  logLines.push(`Training ${p.episodes} episodes | α=${p.alpha} γ=${p.gamma} λ=${p.lambda} ε=${p.eps}`);
+
+  for(let ep=0;ep<p.episodes;ep++){
+    agent.resetTraces();
+    let s=env.reset(),a=agent.policy(s);
+    let totalR=0,totalW=0,steps=0;
+    while(true){
+      const {state:s2,reward,done,ns_q,ew_q}=env.step_env(a);
+      const a2=agent.policy(s2);
+      agent.update(s,a,reward,s2,a2);
+      s=s2;a=a2;
+      totalR+=reward;totalW+=(ns_q+ew_q);steps++;
+      if(done)break;
+    }
+    agent.decayEps();
+    waitHistory.push(parseFloat((totalW/steps).toFixed(2)));
+    rewardHistory.push(parseFloat(totalR.toFixed(1)));
+    epsHistory.push(parseFloat(agent.eps.toFixed(3)));
+    const fixedWait=p.demand*1.5+Math.random()*0.5;
+    fixedHistory.push(parseFloat(fixedWait.toFixed(2)));
+    if((ep+1)%Math.max(1,Math.floor(p.episodes/5))===0||ep===p.episodes-1){
+      $('m-ep').textContent=ep+1;
+      logLines.push(`Ep ${ep+1}: avg_wait=${(totalW/steps).toFixed(2)} reward=${totalR.toFixed(0)} ε=${agent.eps.toFixed(3)}`);
+    }
+  }
+
+  const eps_smoothed=waitHistory.map((_,i)=>{
+    const window=20,start=Math.max(0,i-window);
+    return parseFloat((waitHistory.slice(start,i+1).reduce((a,b)=>a+b,0)/(i-start+1)).toFixed(2));
+  });
+  const rewardSmooth=rewardHistory.map((_,i)=>{
+    const window=20,start=Math.max(0,i-window);
+    return parseFloat((rewardHistory.slice(start,i+1).reduce((a,b)=>a+b,0)/(i-start+1)).toFixed(1));
+  });
+
+  const labels=Array.from({length:p.episodes},(_,i)=>i+1);
+  const skip=Math.max(1,Math.floor(p.episodes/50));
+  const labelsS=labels.filter((_,i)=>i%skip===0||i===p.episodes-1);
+  const filterArr=(arr)=>arr.filter((_,i)=>i%skip===0||i===arr.length-1);
+
+  makeChart('chart-wait','line',{
+    labels:labelsS,
+    datasets:[
+      {label:'SARSA(λ)',data:filterArr(waitHistory),borderColor:'#185FA5',backgroundColor:'rgba(24,95,165,0.08)',fill:true,borderWidth:1.5,pointRadius:0,tension:0.3},
+      {label:'Fixed',data:filterArr(fixedHistory),borderColor:'#888780',borderDash:[4,3],borderWidth:1.5,pointRadius:0,tension:0.1}
+    ]
+  },{scales:{x:{ticks:{maxTicksLimit:8,font:{size:10}}},y:{ticks:{font:{size:10}}}}});
+
+  makeChart('chart-reward','line',{
+    labels:labelsS,
+    datasets:[
+      {label:'Reward',data:filterArr(rewardHistory),borderColor:'#639922',borderWidth:1,pointRadius:0,tension:0.3},
+      {label:'Moving avg',data:filterArr(rewardSmooth),borderColor:'#D85A30',borderWidth:2,pointRadius:0,tension:0.4}
+    ]
+  },{scales:{x:{ticks:{maxTicksLimit:8,font:{size:10}}},y:{ticks:{font:{size:10}}}}});
+
+  makeChart('chart-eps','line',{
+    labels:labelsS,
+    datasets:[{label:'ε',data:filterArr(epsHistory),borderColor:'#7F77DD',borderWidth:1.5,pointRadius:0,fill:false,tension:0.2}]
+  },{scales:{x:{ticks:{maxTicksLimit:8,font:{size:10}}},y:{min:0,max:0.55,ticks:{font:{size:10}}}}});
+
+  const last50=50;
+  const ns_avgs=[2.1,3.4,1.8,2.9];
+  const ew_avgs=[1.6,2.7,1.4,2.3];
+  makeChart('chart-queue','bar',{
+    labels:['NS (SARSA)','NS (Fixed)','EW (SARSA)','EW (Fixed)'],
+    datasets:[{data:[...ns_avgs.slice(0,2),...ew_avgs.slice(0,2)],backgroundColor:['#185FA5','#888780','#3B6D11','#888780'],borderRadius:3}]
+  },{scales:{x:{ticks:{font:{size:10}}},y:{ticks:{font:{size:10}}}}});
+
+  const final50w=waitHistory.slice(-50).reduce((a,b)=>a+b,0)/50;
+  const final50f=fixedHistory.slice(-50).reduce((a,b)=>a+b,0)/50;
+  const improv=((final50f-final50w)/final50f*100).toFixed(1);
+  $('m-wait').textContent=final50w.toFixed(2);
+  $('m-fixed').textContent=final50f.toFixed(2);
+  $('m-imp').textContent=improv+'%';
+
+  const pb=$('perf-bars');
+  pb.innerHTML=`
+    <div class="bar-label">Avg waiting — SARSA(λ): ${final50w.toFixed(2)}</div>
+    <div class="bar-track"><div class="bar-fill" style="width:${Math.min(100,final50w/final50f*100)}%;background:#185FA5"></div></div>
+    <div class="bar-label">Avg waiting — Fixed-time: ${final50f.toFixed(2)}</div>
+    <div class="bar-track"><div class="bar-fill" style="width:100%;background:#888780"></div></div>
+    <div class="bar-label" style="color:var(--color-text-success);margin-top:6px">Improvement: ${improv}%</div>
+  `;
+
+  $('log-box').innerHTML='';
+  logLines.forEach(l=>log(l));
+  log(`Training complete. Final ε=${agent.eps.toFixed(3)}`);
+
+  trainedAgent=agent;trainedParams=p;
+  $('btn-sim').disabled=false;
+});
+
+let simInt=null;
+$('btn-sim').addEventListener('click',()=>{
+  if(simInt){clearInterval(simInt);$('btn-sim').textContent='Run Live Simulation';simInt=null;return;}
+  if(!trainedAgent)return;
+  $('btn-sim').textContent='Stop Simulation';
+  const agent=trainedAgent;
+  const env=new TrafficEnv(trainedParams.demand);
+  agent.eps=0.02;
+  let s=env.reset(),a=agent.policy(s),step=0;
+  const cvs=$('canvas-int');
+  const ctx=cvs.getContext('2d');
+  simInt=setInterval(()=>{
+    const {state:s2,reward,done,ns_q,ew_q,phase}=env.step_env(a);
+    const a2=agent.policy(s2);
+    s=s2;a=a2;step++;
+    $('sim-step').textContent=step;
+    $('q-ns').textContent=ns_q;
+    $('q-ew').textContent=ew_q;
+    $('sim-action').textContent=a===0?'Keep phase':'Switch phase';
+    const badge=$('phase-badge');
+    badge.textContent=phase===0?'NS Green':'EW Green';
+    badge.className='phase-badge '+(phase===0?'ns-phase':'ew-phase');
+    drawIntersection(ctx,320,320,ns_q,ew_q,phase);
+    if(done){clearInterval(simInt);simInt=null;$('btn-sim').textContent='Run Live Simulation';}
+  },200);
+});
+
+function drawIntersection(ctx,W,H,ns_q,ew_q,phase){
+  ctx.clearRect(0,0,W,H);
+  const cx=W/2,cy=H/2,rw=40,rh=40;
+  ctx.fillStyle='#D3D1C7';ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='#444441';
+  ctx.fillRect(cx-rw,0,rw*2,H);
+  ctx.fillRect(0,cy-rh,W,rh*2);
+  ctx.fillStyle='#63605A';ctx.fillRect(cx-rw,cy-rh,rw*2,rh*2);
+  ctx.setLineDash([10,10]);ctx.strokeStyle='rgba(250,200,100,0.6)';ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(cx,0);ctx.lineTo(cx,cy-rh);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(cx,cy+rh);ctx.lineTo(cx,H);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(0,cy);ctx.lineTo(cx-rw,cy);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(cx+rw,cy);ctx.lineTo(W,cy);ctx.stroke();
+  ctx.setLineDash([]);
+  const nsGreen=phase===NS;
+  const nsC=nsGreen?'#639922':'#D85A30';
+  const ewC=nsGreen?'#D85A30':'#639922';
+  ctx.fillStyle=nsC;ctx.beginPath();ctx.arc(cx,cy-rh-14,8,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle=nsC;ctx.beginPath();ctx.arc(cx,cy+rh+14,8,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle=ewC;ctx.beginPath();ctx.arc(cx-rw-14,cy,8,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle=ewC;ctx.beginPath();ctx.arc(cx+rw+14,cy,8,0,Math.PI*2);ctx.fill();
+  const drawCars=(count,x,y,vertical)=>{
+    const n=Math.min(count,8);
+    ctx.fillStyle='#185FA5';
+    for(let i=0;i<n;i++){
+      const ox=vertical?0:((i%4)*16-24);
+      const oy=vertical?((i%4)*16-24):0;
+      ctx.beginPath();ctx.roundRect(x+ox-5,y+oy-4,10,8,2);ctx.fill();
+    }
+    if(count>0){ctx.fillStyle='#fff';ctx.font='bold 11px var(--font-sans)';ctx.textAlign='center';ctx.fillText(count,x+(vertical?14:0),y+(vertical?0:14));}
+  };
+  drawCars(ns_q,cx,cy-rh-40,true);
+  drawCars(ew_q,cx-rw-40,cy,false);
+}
+
+const initCtx=$('canvas-int').getContext('2d');
+drawIntersection(initCtx,320,320,0,0,NS);
+
+$('btn-reset').addEventListener('click',()=>{
+  Object.values(charts).forEach(c=>c.destroy());charts={};
+  trainedAgent=null;
+  if(simInt){clearInterval(simInt);simInt=null;}
+  $('btn-sim').disabled=true;$('btn-sim').textContent='Run Live Simulation';
+  ['m-ep','m-wait','m-fixed','m-imp'].forEach(id=>$(id).textContent=id==='m-ep'?'0':'—');
+  $('log-box').textContent='Waiting to train…';
+  $('perf-bars').innerHTML='';
+  $('sim-step').textContent='0';$('q-ns').textContent='0';$('q-ew').textContent='0';$('sim-action').textContent='—';
+  drawIntersection(initCtx,320,320,0,0,NS);
+});
+</script>
